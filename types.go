@@ -6,32 +6,45 @@ import (
 
 type Connection interface {
 	ReadMessage() (Message, error)
-	WriteMessage(interface{}) error
+	WriteMessage(*Message) error
 }
 
-type WSConn struct {
+type WebsocketConnection struct {
 	ws *websocket.Conn
 }
 
 type Message struct {
-	ID     string                 `json:"id"`
-	Msg    string                 `json:"msg"`
-	Method string                 `json:"method"`
+	ID     int                    `json:"id"`
+	Text   string                 `json:"text"`
+	Type   string                 `json:"type"`
 	Result interface{}            `json:"result"`
 	Params map[string]interface{} `json:"params"`
 }
 
-type MethodHandler func(Connection, *Message)
-
-type WSServer struct {
-	methods map[string]MethodHandler
-	clients map[string]WSClient
-	WS      *websocket.Server
+type ClientMessage struct {
+	Client *Client
+	Msg    *Message
 }
 
-type WSClient struct {
-	Id  string
-	Con Connection
+type MessagesChannel <-chan *ClientMessage
+
+type Server struct {
+	pattern   string
+	clients   map[int]*Client
+	addCh     chan *Client
+	delCh     chan *Client
+	sendAllCh chan *Message
+	doneCh    chan bool
+	errCh     chan error
+	Messages  chan *ClientMessage
+}
+
+type Client struct {
+	id     int
+	conn   Connection
+	server *Server
+	ch     chan *Message
+	doneCh chan bool
 }
 
 type JsonData map[string]interface{}

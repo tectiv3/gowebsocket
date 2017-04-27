@@ -2,99 +2,86 @@ package gowebsocket
 
 import (
 	"golang.org/x/net/websocket"
-
-	"io"
+	"log"
 	"net/http"
 )
 
-func NewWebsocket() WSServer {
-	s := WSServer{}
-	s.methods = make(map[string]MethodHandler)
-	s.clients = make(map[string]WSClient)
-
-	s.WS = &websocket.Server{Handler: s.handler, Handshake: s.handshake}
-
-	return s
+func NewWebsocket(pattern string) *Server {
+	return &Server{
+		pattern:   pattern,
+		clients:   make(map[int]*Client),
+		addCh:     make(chan *Client),
+		delCh:     make(chan *Client),
+		sendAllCh: make(chan *Message),
+		doneCh:    make(chan bool),
+		errCh:     make(chan error),
+		Messages:  make(chan *ClientMessage, 100),
+	}
 }
 
-func (s *WSServer) Method(name string, fn MethodHandler) {
-	s.methods[name] = fn
+func (s *Server) Add(c *Client) {
+	s.addCh <- c
 }
 
-func (s *WSServer) handler(ws *websocket.Conn) {
-	conn := WSConn{ws}
-	defer ws.Close()
+func (s *Server) Del(c *Client) {
+	s.delCh <- c
+}
 
-	for {
-		msg, err := conn.ReadMessage()
+func (s *Server) SendAll(msg *Message) {
+	s.sendAllCh <- msg
+}
 
-		if err != nil {
-			if err != io.EOF {
-				// send error
-				// Log.WithField("error", err).WithField("msg", msg).Error("Read Error")
+func (s *Server) Done() {
+	s.doneCh <- true
+}
+
+func (s *Server) Err(err error) {
+	s.errCh <- err
+}
+
+func (s *Server) sendAll(msg *Message) {
+	for _, client := range s.clients {
+		client.Send(msg)
+	}
+}
+
+func (s *Server) Listen() {
+	// websocket handler
+	onConnected := func(ws *websocket.Conn) {
+		defer func() {
+			if err := ws.Close(); err != nil {
+				s.errCh <- err
 			}
-			break
+		}()
+
+		client := NewClient(&WebsocketConnection{ws}, s)
+		s.Add(client)
+		client.Listen()
+	}
+
+	http.Handle(s.pattern, websocket.Handler(onConnected))
+	for {
+		select {
+		// Add new a client
+		case c := <-s.addCh:
+			s.clients[c.id] = c
+			log.Printf("Clients connected: %d", len(s.clients))
+
+		// del a client
+		case c := <-s.delCh:
+			log.Println("Delete client")
+			delete(s.clients, c.id)
+
+		// broadcast message for all clients
+		case msg := <-s.sendAllCh:
+			log.Println("Send all:", msg)
+			s.sendAll(msg)
+
+		case err := <-s.errCh:
+			log.Println("Error:", err.Error())
+
+		case <-s.doneCh:
+			return
 		}
-
-		s.handleMessage(&conn, &msg)
 	}
-}
-
-func (s *WSServer) handleMessage(conn Connection, m *Message) {
-	switch m.Msg {
-	case "connect":
-		s.handleConnect(conn, m)
-	case "ping":
-		s.handlePing(conn, m)
-	case "method":
-		s.handleMethod(conn, m)
-	default:
-		//send error
-		// Log.WithField("msg", m).Error("Unknown Message Type")
-		break
-	}
-}
-
-func (s *WSServer) handleMethod(conn Connection, m *Message) {
-	fn, ok := s.methods[m.Method]
-
-	if !ok {
-		// Log.WithField("method", m.Method).Error("Method Not Found")
-		return
-	}
-
-	go fn(conn, m)
-}
-
-func (s *WSServer) handleConnect(conn Connection, m *Message) {
-	id := "id" //RandomId(10)
-	s.clients[id] = WSClient{id, conn}
-	conn.WriteMessage(JsonData{"msg": "connected", "id": id})
-}
-
-func (s *WSServer) handleDisconnect() {
-	delete(s.clients, "id")
-}
-
-func (s *WSServer) handlePing(conn Connection, m *Message) {
-	msg := map[string]string{
-		"msg": "pong",
-	}
-
-	if m.ID != "" {
-		msg["id"] = m.ID
-	}
-
-	conn.WriteMessage(msg)
-}
-
-func (s *WSServer) handshake(config *websocket.Config, req *http.Request) error {
-	// accept all connections
-	return nil
-}
-
-func (s *WSServer) sendAll(msg *Message) {
-	// for _, c := range s.clients {
-	// c.Write(msg)
-	// }
 }
