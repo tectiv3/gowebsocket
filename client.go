@@ -5,8 +5,6 @@ import (
 	"io"
 )
 
-const channelBufSize = 100
-
 var maxId int = 0
 
 func NewClient(conn Connection, server *Server) *Client {
@@ -18,15 +16,11 @@ func NewClient(conn Connection, server *Server) *Client {
 		panic("server cannot be nil")
 	}
 
-	maxId++
 	ch := make(chan *Message, channelBufSize)
 	doneCh := make(chan bool)
+	maxId++
 
 	return &Client{maxId, conn, server, ch, doneCh}
-}
-
-func (c *Client) Connection() Connection {
-	return c.conn
 }
 
 func (c *Client) Send(msg *Message) {
@@ -40,10 +34,6 @@ func (c *Client) Send(msg *Message) {
 
 func (c *Client) Done() {
 	c.doneCh <- true
-}
-
-func (c *Client) Server() *Server {
-	return c.server
 }
 
 // Listen Write and Read request via chanel
@@ -78,6 +68,7 @@ func (c *Client) listenRead() {
 			c.server.Del(c)
 			c.doneCh <- true // for listenWrite method
 			return
+
 		// read data from websocket connection
 		default:
 			if msg, err := c.conn.ReadMessage(); err != nil {

@@ -15,7 +15,7 @@ func NewWebsocket(pattern string) *Server {
 		sendAllCh: make(chan *Message),
 		doneCh:    make(chan bool),
 		errCh:     make(chan error),
-		Messages:  make(chan *ClientMessage, 100),
+		Messages:  make(chan *ClientMessage, channelBufSize),
 	}
 }
 
@@ -67,14 +67,13 @@ func (s *Server) Listen() {
 			s.clients[c.id] = c
 			log.Printf("Clients connected: %d", len(s.clients))
 
-		// del a client
+		// Del a client
 		case c := <-s.delCh:
 			log.Println("Delete client")
 			delete(s.clients, c.id)
 
-		// broadcast message for all clients
+		// Broadcast message for all clients
 		case msg := <-s.sendAllCh:
-			log.Println("Send all:", msg)
 			s.sendAll(msg)
 
 		case err := <-s.errCh:

@@ -4,6 +4,8 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+const channelBufSize = 100
+
 type Connection interface {
 	ReadMessage() (Message, error)
 	WriteMessage(*Message) error
@@ -46,5 +48,3 @@ type Client struct {
 	ch     chan *Message
 	doneCh chan bool
 }
-
-type JsonData map[string]interface{}
