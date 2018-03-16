@@ -16,11 +16,11 @@ type WebsocketConnection struct {
 }
 
 type Message struct {
-	ID     int                    `json:"id"`
-	Text   string                 `json:"text"`
+	ID     int                    `json:"id,omitempty"`
+	Text   string                 `json:"text,omitempty"`
 	Type   string                 `json:"type"`
-	Result interface{}            `json:"result"`
-	Params map[string]interface{} `json:"params"`
+	Result interface{}            `json:"result,omitempty"`
+	Params map[string]interface{} `json:"params,omitempty"`
 }
 
 type ClientMessage struct {
