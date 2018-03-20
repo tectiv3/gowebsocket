@@ -4,7 +4,10 @@ import (
 	"golang.org/x/net/websocket"
 	"log"
 	"net/http"
+	"sync"
 )
+
+var clientsMutex = sync.Mutex{}
 
 func NewWebsocket(pattern string) *Server {
 	return &Server{
@@ -40,9 +43,15 @@ func (s *Server) Err(err error) {
 }
 
 func (s *Server) sendAll(msg *Message) {
+	clientsMutex.Lock()
+	defer clientsMutex.Unlock()
 	for _, client := range s.clients {
 		client.Send(msg)
 	}
+}
+
+func (s *Server) Clients() map[int]*Client {
+	return s.clients
 }
 
 func (s *Server) Listen() {
@@ -64,13 +73,17 @@ func (s *Server) Listen() {
 		select {
 		// Add new a client
 		case c := <-s.addCh:
+			clientsMutex.Lock()
 			s.clients[c.id] = c
 			log.Printf("Clients connected: %d", len(s.clients))
+			clientsMutex.Unlock()
 
 		// Del a client
 		case c := <-s.delCh:
 			log.Println("Delete client")
+			clientsMutex.Lock()
 			delete(s.clients, c.id)
+			clientsMutex.Unlock()
 
 		// Broadcast message for all clients
 		case msg := <-s.sendAllCh:
