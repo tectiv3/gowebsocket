@@ -1,4 +1,4 @@
-module gowebsocket
+module github.com/tectiv3/gowebsocket
 
 go 1.13
 
